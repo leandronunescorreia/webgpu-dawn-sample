@@ -1,0 +1,40 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "CMake: configure native-debug",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "-S",
+        ".",
+        "-B",
+        "build/native-debug",
+        "-DCMAKE_BUILD_TYPE=Debug"
+      ],
+      "group": "build",
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "CMake: build native-debug",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "build/native-debug"
+      ],
+      "group": "build",
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "Clean build dir",
+      "type": "shell",
+      "command": "rm -rf build",
+      "problemMatcher": []
+    }
+  ]
+}

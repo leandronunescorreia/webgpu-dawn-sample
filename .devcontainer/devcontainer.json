@@ -1,0 +1,61 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/cpp
+{
+  "name": "${localWorkspaceFolderBasename}",
+  "build": {
+    "context": "..", // shared context
+    "dockerfile": "Dockerfile",
+    "args": {
+    "APP_NAME": "${localWorkspaceFolderBasename}"
+    }
+  },
+
+    "runArgs": [
+    "--shm-size=1gb",
+    "--cap-add=SYS_ADMIN",          // Add SYS_ADMIN capability
+    "--privileged",                 // Run container in privileged mode
+    "--net=host"
+    ],  
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	"features": {},
+
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	"forwardPorts": [],
+
+	// Use 'postCreateCommand' to run commands after the container is created.
+	"postCreateCommand": "gcc -v && emcc --version && cmake --version && python3 --version",
+
+    // customizations for VS Code
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash"
+            },
+            "extensions": [
+                "ms-vscode.cmake-tools",
+                "ms-vscode.cpptools-extension-pack",
+                "ms-python.python",
+                "ms-toolsai.jupyter",
+                "ms-vscode.cpptools",
+                "ms-vscode.cpptools-themes",
+                "ms-vscode.makefile-tools",
+                "ms-vscode.cmake-tools",
+                "ms-vscode.live-server",
+                "llvm-vs-code-extensions.lldb-dap"
+            ]
+        }
+    },
+
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces,type=bind,consistency=cached",
+    "workspaceFolder": "/workspaces",
+
+    // mounts using env vars instead of hardcoded paths
+    "mounts": [
+        "source=C:\\videos,target=/mnt/videos,type=bind,consistency=delegated",
+        "source=C:\\dev\\models,target=/mnt/models,type=bind,consistency=delegated",
+        "source=C:\\dev\\datasets,target=/mnt/datasets,type=bind,consistency=delegated"
+    ],
+
+    // Connect as root user for full privileges
+    "remoteUser": "root"
+}
