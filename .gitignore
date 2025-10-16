@@ -42,7 +42,7 @@
 
 # Build directories
 build/
-build-wgpu/
+build-*/
 webgpu/
 
 *.zip
