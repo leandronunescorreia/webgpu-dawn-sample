@@ -1,67 +1,120 @@
-FROM debian:bookworm-slim
+# ==========================================================
+# Modern WebGPU / Dawn Development Environment
+# Ubuntu 24.04 + NVIDIA + Vulkan + C++23
+# ==========================================================
 
-# Avoid interactive apt dialogs
+FROM ubuntu:24.04
+
 ENV DEBIAN_FRONTEND=noninteractive
 
-# --- System setup ---
-RUN apt update && apt upgrade -y && apt install -y --no-install-recommends \
-    clang \
-    clang-tools \
-    cmake \
-    ccache \
-    make \
-    build-essential \
-    python3 \
-    bash \
-    git \
-    nodejs \
-    npm \
-    sudo \
-    coreutils \
-    findutils \
-    util-linux \
+# ----------------------------------------------------------
+# Base setup + NVIDIA repositories
+# ----------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    gnupg \
     ca-certificates \
     curl \
-    lldb \
-    gdb \
- && apt clean \
- && rm -rf /var/lib/apt/lists/*
+    software-properties-common \
+    && rm -rf /var/lib/apt/lists/*
 
-# --- Set up clang as default compiler ---
-RUN update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100 \
- && update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++ 100 \
- && cc --version && c++ --version
+RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb && \
+    dpkg -i cuda-keyring_1.1-1_all.deb && \
+    rm cuda-keyring_1.1-1_all.deb && \
+    apt-get update
 
-# --- Install Emscripten SDK ---
-WORKDIR /opt
-RUN git clone https://github.com/emscripten-core/emsdk.git \
- && cd emsdk \
- && ./emsdk install latest \
- && ./emsdk activate latest
+# ----------------------------------------------------------
+# Core build tools and Python (fixed)
+# ----------------------------------------------------------
+RUN apt-get install -y --no-install-recommends \
+    build-essential \
+    clang \
+    clangd \
+    clang-format \
+    clang-tidy \
+    g++-13 \
+    gcc-13 \
+    ccache \
+    make \
+    git \
+    pkg-config \
+    ninja-build \
+    unzip \
+    zip \
+    vim \
+    less \
+    sudo \
+    && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*    
 
-# --- Environment setup ---
-ENV EMSDK=/opt/emsdk
-ENV EMSDK_NODE=/opt/emsdk/node/latest/bin
-ENV EMSDK_UPSTREAM=/opt/emsdk/upstream
-ENV EMSCRIPTEN=/opt/emsdk/upstream/emscripten
-ENV PATH="${EMSDK}:${EMSDK_NODE}:${EMSCRIPTEN}:${EMSDK_UPSTREAM}/bin:${PATH}"
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-full \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Preload environment for all shells
-RUN echo "source /opt/emsdk/emsdk_env.sh > /dev/null 2>&1 || true" >> /etc/bash.bashrc
-RUN echo "source /opt/emsdk/emsdk_env.sh > /dev/null 2>&1 || true" >> /etc/profile
-ENV PATH="/opt/emsdk:/opt/emsdk/upstream/emscripten:/opt/emsdk/upstream/bin:/opt/emsdk/node/latest/bin:${PATH}"
+# ----------------------------------------------------------
+# Latest CMake
+# ----------------------------------------------------------
+RUN wget https://github.com/Kitware/CMake/releases/download/v3.30.9/cmake-3.30.9-linux-x86_64.sh \
+    && mkdir -p /opt/cmake \
+    && sh cmake-3.30.9-linux-x86_64.sh --prefix=/opt/cmake --skip-license \
+    && ln -sf /opt/cmake/bin/cmake /usr/local/bin/cmake \
+    && rm cmake-3.30.9-linux-x86_64.sh
 
-# --- Optional: create non-root user for VSCode DevContainer ---
-ARG USER_NAME
-ENV USER_NAME=${USER_NAME:-root}
-# RUN useradd -ms /bin/bash ${USER_NAME} \
-#  && usermod -aG sudo ${USER_NAME} \
-#  && echo "${USER_NAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USER_NAME} \
-#  && chmod 0440 /etc/sudoers.d/${USER_NAME}
+# ----------------------------------------------------------
+# Vulkan & graphics libs
+# ----------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libvulkan1 \
+    vulkan-tools \
+    vulkan-validationlayers \
+    libvulkan-dev \
+    libx11-dev \
+    libx11-xcb-dev \
+    libxrandr-dev \
+    libxinerama-dev \
+    libxcursor-dev \
+    libxi-dev \
+    libgl1-mesa-dev \
+    libglu1-mesa-dev \
+    mesa-common-dev \
+    mesa-vulkan-drivers \
+    spirv-tools \
+    spirv-headers \
+    glslang-tools \
+    nodejs \
+    npm \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# ----------------------------------------------------------
+# Node + WebGPU JS types (for host testing)
+# ----------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends nodejs npm && \
+    npm install -g @webgpu/types && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# ----------------------------------------------------------
+# Default compilers and environment
+# ----------------------------------------------------------
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100 && \
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 100
+
+ENV CC=gcc
+ENV CXX=g++
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=graphics,utility,compute
+
+# ----------------------------------------------------------
+# Optional non-root developer user
+# ----------------------------------------------------------
+ARG USER_NAME=developer
+RUN useradd -m -s /bin/bash -G sudo ${USER_NAME} && \
+    echo "${USER_NAME} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# drop to non-root user
 USER ${USER_NAME}
 WORKDIR /home/${USER_NAME}
 
 ENV SHELL=/bin/bash
-
 ENTRYPOINT ["/bin/bash"]

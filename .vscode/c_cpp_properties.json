@@ -3,8 +3,12 @@
     {
       "name": "Linux",
       "includePath": [
-        "${workspaceFolder}/build-wgpu/_deps/wgpu-linux-x86_64-release-src/include/**",
-        "${workspaceFolder}/**"
+          "${workspaceFolder}/**",
+          // "${workspaceFolder}/webgpu/wgpu-native/include",
+          // "${workspaceFolder}/webgpu/dawn/include",
+          // "${workspaceFolder}/webgpu/emdawnwebgpu/include",
+          // "${workspaceFolder}/webgpu/emscripten/include",
+          "${workspaceFolder}/build/_deps/dawn-7187-linux-x64-release-src/include/**"
       ],
       "defines": [],
       "compilerPath": "/usr/bin/g++",

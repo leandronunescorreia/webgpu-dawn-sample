@@ -11,10 +11,11 @@
   },
 
     "runArgs": [
-    "--shm-size=1gb",
+    "--gpus", "all",                // Enable all available GPUs
+    "--shm-size=1gb",               // Increase shared memory size to 1GB   
     "--cap-add=SYS_ADMIN",          // Add SYS_ADMIN capability
     "--privileged",                 // Run container in privileged mode
-    "--net=host"
+    "--net=host"                    // Use host network
     ],  
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	"features": {},
@@ -23,7 +24,7 @@
 	"forwardPorts": [],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": "gcc -v && emcc --version && cmake --version && python3 --version",
+	"postCreateCommand": "gcc -v",
 
     // customizations for VS Code
     "customizations": {
