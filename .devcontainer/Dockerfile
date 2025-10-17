@@ -34,6 +34,9 @@ RUN apt-get install -y --no-install-recommends \
     clang-tidy \
     g++-13 \
     gcc-13 \
+    gdb \
+    lldb \
+    liblldb-dev \
     ccache \
     make \
     git \

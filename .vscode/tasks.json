@@ -2,37 +2,56 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "CMake: Configure Native",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-      "--build",
-      "build"
-      ],
-      "group": "build",
-      "problemMatcher": [
-      "$gcc"
-      ]
-    },
-    {
-      "label": "CMake: Build Native",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-      ".",
-      "-B",
-      "build"
-      ],
-      "group": "build",
-      "problemMatcher": [
-      "$gcc"
-      ]
-    },
-    {
       "label": "Clean Build",
       "type": "shell",
       "command": "rm -rf build",
       "problemMatcher": []
+    },
+    {
+      "label": "CMake: Configure Debug",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "-B", "build",
+        "-DCMAKE_BUILD_TYPE=Debug",
+        "-DWEBGPU_BACKEND=DAWN"
+      ],
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "CMake: Configure Release",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "-B", "build",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DWEBGPU_BACKEND=DAWN"
+      ],
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Build App Target (Debug)",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build", "build",
+        "--target", "App"
+      ],
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Build App Target (Release)",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build", "build",
+        "--target", "App"
+      ],
+      "group": "build",
+      "problemMatcher": ["$gcc"]
     }
   ]
 }

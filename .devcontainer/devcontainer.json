@@ -34,13 +34,12 @@
             },
             "extensions": [
                 "ms-vscode.cmake-tools",
-                "ms-vscode.cpptools-extension-pack",
                 "ms-python.python",
                 "ms-toolsai.jupyter",
                 "ms-vscode.cpptools",
                 "ms-vscode.cpptools-themes",
+                "ms-vscode.cpptools-extension-pack",                
                 "ms-vscode.makefile-tools",
-                "ms-vscode.cmake-tools",
                 "ms-vscode.live-server",
                 "llvm-vs-code-extensions.lldb-dap"
             ]
