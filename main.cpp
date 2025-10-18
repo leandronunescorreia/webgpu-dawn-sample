@@ -208,6 +208,19 @@ int main (int, char**) {
 
     deviceDesc.deviceLostCallbackInfo = deviceLostCallbackInfo;
 
+    auto uncapturedErrorCallback = [](WGPUDevice const * device, WGPUErrorType type, WGPUStringView message, WGPU_NULLABLE void* userdata1, WGPU_NULLABLE void* userdata2) {
+        std::cout << "Device " << std::hex << device << std::dec << " uncaptured error callback invoked, type: " << std::hex << type << std::dec;
+        std::cout << ", message: " << std::string(message.data, message.length);
+        if(userdata1 || userdata2) {
+            std::cout << ", userdata not null!";
+        }
+        std::cout << std::endl;
+    };
+    deviceDesc.uncapturedErrorCallbackInfo = {};
+    deviceDesc.uncapturedErrorCallbackInfo.nextInChain = nullptr;
+    deviceDesc.uncapturedErrorCallbackInfo.callback = uncapturedErrorCallback;
+    deviceDesc.uncapturedErrorCallbackInfo.userdata1 = nullptr;
+    deviceDesc.uncapturedErrorCallbackInfo.userdata2 = nullptr;
 
 	// A function that is invoked whenever the device stops being available.
 	auto onDeviceRequestEnded = [](WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView message, WGPU_NULLABLE void* userdata1, WGPU_NULLABLE void* userdata2) {
