@@ -4,7 +4,7 @@
       "name": "Linux",
       "includePath": [
           "${workspaceFolder}/**",
-          // "${workspaceFolder}/webgpu/wgpu-native/include",
+          "${workspaceFolder}/include/**",
           // "${workspaceFolder}/webgpu/dawn/include",
           // "${workspaceFolder}/webgpu/emdawnwebgpu/include",
           // "${workspaceFolder}/webgpu/emscripten/include",
