@@ -19,7 +19,7 @@ ComputeEngine::~ComputeEngine() {
     m_limits = {};
 }
 
-void ComputeEngine::getInstance() {
+WGPUAdapter ComputeEngine::createInstanceAndAdapter() {
     WGPUInstanceDescriptor desc = {};
     desc.nextInChain = nullptr;
 
@@ -33,11 +33,11 @@ void ComputeEngine::getInstance() {
         std::cerr << "Could not initialize WebGPU!" << std::endl;
         throw std::runtime_error("Could not initialize WebGPU instance");
     }
-}
-
-WGPUAdapter ComputeEngine::getAdapter() {
+    std::cout << "WebGPU instance " << std::hex << this->m_instance << std::dec << " created successfully." << std::endl;
+    
 	WGPURequestAdapterOptions adapterOpts = {};
 	adapterOpts.nextInChain = nullptr;
+    adapterOpts.backendType = WGPUBackendType_Vulkan;  // or Metal / D3D12 / OpenGL
 	WGPUAdapter adapter = {};
 
 	auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringView message, WGPU_NULLABLE void* userdata1, WGPU_NULLABLE void* userdata2) {
@@ -51,15 +51,14 @@ WGPUAdapter ComputeEngine::getAdapter() {
             std::cout << "Could not get WebGPU adapter: " << std::endl;
 		}
 	};
-
     WGPURequestAdapterCallbackInfo callbackInfo = {};
     callbackInfo.nextInChain = nullptr;
-    callbackInfo.mode = WGPUCallbackMode_WaitAnyOnly;
+    callbackInfo.mode = WGPUCallbackMode_AllowSpontaneous;
     callbackInfo.callback = onAdapterRequestEnded;
     callbackInfo.userdata1 = (void*)&adapter;
-
+    // We request the adapter
 	wgpuInstanceRequestAdapter(
-		this->m_instance,
+		this->m_instance /* equivalent of navigator.gpu */,
 		&adapterOpts,
         callbackInfo
 	);
@@ -69,10 +68,13 @@ WGPUAdapter ComputeEngine::getAdapter() {
         throw std::runtime_error("Could not initialize WebGPU adapter");
     }
 
+	std::cout << "Got adapter: " << adapter << std::endl;
+
     return adapter;
 }
 
-WGPUDevice ComputeEngine::getDevice(WGPUAdapter adapter) {
+
+WGPUDevice ComputeEngine::getDevice(WGPUAdapter& adapter) {
     WGPUDeviceDescriptor deviceDesc = {};
     deviceDesc.nextInChain = nullptr;
     deviceDesc.label = WGPUStringView{"My Device", 9}; // anything works here, that's your call
@@ -98,8 +100,6 @@ WGPUDevice ComputeEngine::getDevice(WGPUAdapter adapter) {
     deviceLostCallbackInfo.userdata1 = nullptr;
     deviceLostCallbackInfo.userdata2 = nullptr;
 
-    deviceDesc.deviceLostCallbackInfo = deviceLostCallbackInfo;
-
     auto uncapturedErrorCallback = [](WGPUDevice const * device, WGPUErrorType type, WGPUStringView message, WGPU_NULLABLE void* userdata1, WGPU_NULLABLE void* userdata2) {
         std::cout << "Device " << std::hex << device << std::dec << " uncaptured error callback invoked, type: " << std::hex << type << std::dec;
         std::cout << ", message: " << std::string(message.data, message.length);
@@ -108,11 +108,14 @@ WGPUDevice ComputeEngine::getDevice(WGPUAdapter adapter) {
         }
         std::cout << std::endl;
     };
-    deviceDesc.uncapturedErrorCallbackInfo = {};
-    deviceDesc.uncapturedErrorCallbackInfo.nextInChain = nullptr;
-    deviceDesc.uncapturedErrorCallbackInfo.callback = uncapturedErrorCallback;
-    deviceDesc.uncapturedErrorCallbackInfo.userdata1 = nullptr;
-    deviceDesc.uncapturedErrorCallbackInfo.userdata2 = nullptr;
+    WGPUUncapturedErrorCallbackInfo uncapturedErrorCallbackInfo = {};
+    uncapturedErrorCallbackInfo.nextInChain = nullptr;
+    uncapturedErrorCallbackInfo.callback = uncapturedErrorCallback;
+    uncapturedErrorCallbackInfo.userdata1 = nullptr;
+    uncapturedErrorCallbackInfo.userdata2 = nullptr;
+
+    deviceDesc.deviceLostCallbackInfo = deviceLostCallbackInfo;
+    deviceDesc.uncapturedErrorCallbackInfo = uncapturedErrorCallbackInfo;
 
 	// A function that is invoked whenever the device stops being available.
 	auto onDeviceRequestEnded = [](WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView message, WGPU_NULLABLE void* userdata1, WGPU_NULLABLE void* userdata2) {
@@ -130,9 +133,9 @@ WGPUDevice ComputeEngine::getDevice(WGPUAdapter adapter) {
 
     WGPURequestDeviceCallbackInfo callbackInfoDevice = {};
     callbackInfoDevice.nextInChain = nullptr;
-    callbackInfoDevice.mode = WGPUCallbackMode_WaitAnyOnly;
+    callbackInfoDevice.mode = WGPUCallbackMode_AllowSpontaneous;
     callbackInfoDevice.callback = onDeviceRequestEnded;
-    callbackInfoDevice.userdata1 = (void*)&m_device;
+    callbackInfoDevice.userdata1 = (void*)&this->m_device;
     callbackInfoDevice.userdata2 = nullptr;
 	wgpuAdapterRequestDevice(
 		adapter,
@@ -140,11 +143,19 @@ WGPUDevice ComputeEngine::getDevice(WGPUAdapter adapter) {
 		callbackInfoDevice
 	);
 
+    if (!this->m_device) {
+        std::cerr << "Could not initialize the Device!" << std::endl;
+        throw std::runtime_error("Could not initialize WebGPU device");
+    }
+
+    std::cout << "WebGPU device " << std::hex << this->m_device << std::dec << " created successfully." << std::endl;
+
     wgpuAdapterRelease(adapter);
+
     return m_device;
 }
 
-WGPULimits ComputeEngine::getDeviceLimits(WGPUDevice device) {
+WGPULimits ComputeEngine::getDeviceLimits(WGPUDevice& device) {
     WGPUSupportedFeatures* supported = new WGPUSupportedFeatures();
 	wgpuDeviceGetFeatures(device, supported);
 
@@ -202,8 +213,7 @@ WGPULimits ComputeEngine::getDeviceLimits(WGPUDevice device) {
 
 bool ComputeEngine::Initialize() {
 
-    getInstance();
-    WGPUAdapter adapter = getAdapter();
+    WGPUAdapter adapter = createInstanceAndAdapter();
     this->m_device = getDevice(adapter);
     this->m_limits = getDeviceLimits(this->m_device);
 

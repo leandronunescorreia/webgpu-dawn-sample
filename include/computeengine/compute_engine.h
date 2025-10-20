@@ -10,10 +10,9 @@ public:
     ComputeEngine();
     ~ComputeEngine();
 
-    void getInstance();
-    WGPUAdapter getAdapter();
-    WGPUDevice getDevice(WGPUAdapter adapter);
-    WGPULimits getDeviceLimits(WGPUDevice device);
+    WGPUAdapter createInstanceAndAdapter();
+    WGPUDevice getDevice(WGPUAdapter& adapter);
+    WGPULimits getDeviceLimits(WGPUDevice& device);
     
     void initBindGroupLayout();
     void initComputePipeline();

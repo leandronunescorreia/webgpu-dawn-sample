@@ -14,7 +14,8 @@ int main (int, char**) {
         return -1;
     }
 
-    engine->Shutdown();
+    engine->Run();
+    
     delete engine;
     
     return 0;
