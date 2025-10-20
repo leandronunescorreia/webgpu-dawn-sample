@@ -255,6 +255,8 @@ void ComputeEngine::initBindGroupLayout() {
 
 void ComputeEngine::initComputePipeline() {
 static const char shaderCode[] = R"(
+override group_size: u32 = 32u;
+
 @group(0) @binding(0) var<storage, read> inputBuffer: array<f32>;
 @group(0) @binding(1) var<storage, read_write> outputBuffer: array<f32>;
 
@@ -262,7 +264,7 @@ fn f(x: f32) -> f32 {
     return 2.0 * x + 1.0;
 }
 
-@compute @workgroup_size(32)
+@compute @workgroup_size(group_size)
 fn computeMain(@builtin(global_invocation_id) id: vec3<u32>) {
     let idx = id.x;
     outputBuffer[idx] = f(inputBuffer[idx]);
@@ -270,17 +272,20 @@ fn computeMain(@builtin(global_invocation_id) id: vec3<u32>) {
 )";
 
     WGPUShaderModuleWGSLDescriptor wgslDesc = {};
+    wgslDesc.chain = {};
+    wgslDesc.chain.sType = WGPUSType_ShaderSourceWGSL;
+    wgslDesc.chain.next = nullptr;
     wgslDesc.code = WGPUStringView{shaderCode, static_cast<uint32_t>(std::strlen(shaderCode))};
 
     WGPUShaderModuleDescriptor smDesc = {};
-    smDesc.label = WGPUStringView{"Compute Shader Module", 22};
+    smDesc.label = WGPUStringView{"Compute Shader Module", static_cast<uint32_t>(std::strlen("Compute Shader Module"))};
     smDesc.nextInChain = reinterpret_cast<WGPUChainedStruct*>(&wgslDesc);
     WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(this->m_device, &smDesc);
 
 
     WGPUPipelineLayoutDescriptor pipelineLayoutDesc = {};
     pipelineLayoutDesc.nextInChain = nullptr;
-    pipelineLayoutDesc.label = WGPUStringView{"Compute Pipeline Layout", 24};
+    pipelineLayoutDesc.label = WGPUStringView{"Compute Pipeline Layout", static_cast<uint32_t>(std::strlen("Compute Pipeline Layout"))};
     pipelineLayoutDesc.bindGroupLayoutCount = 1;
     pipelineLayoutDesc.bindGroupLayouts = &this->m_bindGroupLayout;
 
@@ -289,74 +294,71 @@ fn computeMain(@builtin(global_invocation_id) id: vec3<u32>) {
 
     WGPUConstantEntry constantEntry = {};
     constantEntry.nextInChain = nullptr;
-    constantEntry.key = WGPUStringView{"group_size", 256};
-    constantEntry.value = static_cast<double>(256);
+    constantEntry.key = WGPUStringView{"group_size", static_cast<uint32_t>(std::strlen("group_size"))};
+    constantEntry.value = static_cast<double>(256.0);
 
     WGPUComputeState computeState = {};
     computeState.nextInChain = nullptr;
     computeState.module = shaderModule;
-    computeState.entryPoint = WGPUStringView{"computeMain", 10};
+    computeState.entryPoint = WGPUStringView{"computeMain", static_cast<uint32_t>(std::strlen("computeMain"))};
     computeState.constants = &constantEntry;
     computeState.constantCount = 1;
 
-    WGPUComputePipelineDescriptor pipelineDesc = {
-        .nextInChain = nullptr,
-        .label = WGPUStringView{"Compute Pipeline", 16},
-        .layout = this->m_pipelineLayout,
-        .compute = computeState
-    };
+    WGPUComputePipelineDescriptor pipelineDesc = {};
+    pipelineDesc.nextInChain = nullptr;
+    pipelineDesc.label = WGPUStringView{"Compute Pipeline", static_cast<uint32_t>(std::strlen("Compute Pipeline"))};
+    pipelineDesc.layout = this->m_pipelineLayout;
+    pipelineDesc.compute = computeState;
 
     this->m_pipeline = wgpuDeviceCreateComputePipeline(this->m_device, &pipelineDesc);    
 }
 
 void ComputeEngine::initBuffers() {
     const int32_t numVals = 1024;
+    const uint64_t bytes = (uint64_t)numVals * sizeof(float); // floats
 
-    WGPUBufferDescriptor aBufferDesc = {
-        .nextInChain = nullptr,
-        .label = WGPUStringView{"A Buffer", 8},
-        .usage = WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst,
-        .size = numVals * sizeof(uint32_t),
-        .mappedAtCreation = false
-    };
+    WGPUBufferDescriptor aBufferDesc = {};
+    aBufferDesc.nextInChain = nullptr;
+    aBufferDesc.label = WGPUStringView{"A Buffer", static_cast<uint32_t>(strlen("A Buffer"))};
+    aBufferDesc.usage = (WGPUBufferUsage)(WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst);
+    aBufferDesc.size = bytes;
+    aBufferDesc.mappedAtCreation = false;
     this->m_aBuffer = wgpuDeviceCreateBuffer(this->m_device, &aBufferDesc);
 
-
-    WGPUBufferDescriptor resBufferDesc = {
-        .nextInChain = nullptr,
-        .label = WGPUStringView{"Result Buffer", 13},
-        .usage = WGPUBufferUsage_Storage | WGPUBufferUsage_CopySrc,
-        .size = numVals * sizeof(uint32_t),
-        .mappedAtCreation = false
-    };
+    WGPUBufferDescriptor resBufferDesc = {};
+    resBufferDesc.nextInChain = nullptr;
+    resBufferDesc.label = WGPUStringView{"Result Buffer", static_cast<uint32_t>(strlen("Result Buffer"))};
+    resBufferDesc.usage = (WGPUBufferUsage)(WGPUBufferUsage_Storage | WGPUBufferUsage_CopySrc);
+    resBufferDesc.size = bytes;
+    resBufferDesc.mappedAtCreation = false;
     this->m_resBuffer = wgpuDeviceCreateBuffer(this->m_device, &resBufferDesc);
 
-	// Create an intermediary buffer to which we copy the output and that can be
-	// used for reading into the CPU memory.
-	resBufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead;
-	this->m_mapBuffer = wgpuDeviceCreateBuffer(this->m_device, &resBufferDesc);
-
+    // map/read buffer (copy target)
+    WGPUBufferDescriptor mapDesc = resBufferDesc;
+    mapDesc.usage = (WGPUBufferUsage)(WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead);
+    this->m_mapBuffer = wgpuDeviceCreateBuffer(this->m_device, &mapDesc);
 }
 
 void ComputeEngine::BindGroups() {
     const int32_t numVals = 1024;
+    const uint64_t bytes = (uint64_t)numVals * sizeof(float);
 
     WGPUBindGroupEntry aBufBinding = {};
     aBufBinding.binding = 0;
     aBufBinding.buffer = this->m_aBuffer;
     aBufBinding.offset = 0;
-    aBufBinding.size =  (size_t)numVals * sizeof(uint32_t);
+    aBufBinding.size =  bytes;
 
     WGPUBindGroupEntry resBufBinding = {};
     resBufBinding.binding = 1;
     resBufBinding.buffer = this->m_resBuffer;
     resBufBinding.offset = 0;
-    resBufBinding.size = (size_t)numVals * sizeof(uint32_t);
+    resBufBinding.size = bytes;
 
     WGPUBindGroupEntry entries[] = {aBufBinding, resBufBinding};
 
     WGPUBindGroupDescriptor bindGroupDesc = {};
-    bindGroupDesc.layout = m_bindGroupLayout;
+    bindGroupDesc.layout = this->m_bindGroupLayout;
     bindGroupDesc.entryCount = (uint32_t)std::size(entries);
     bindGroupDesc.entries = entries;
 	this->m_bindGroup = wgpuDeviceCreateBindGroup(m_device, &bindGroupDesc);
@@ -368,18 +370,17 @@ void ComputeEngine::Run() {
     // bool timeSupport = false;
 
     // Create the data arrays
-    std::vector<uint32_t> aArray(static_cast<size_t>(numVals));
     std::vector<uint32_t> res(1u, 0u);
 
     // Initialize arrays
+    std::vector<float> aArray((size_t)numVals);
     for (int32_t i = 0; i < numVals; ++i) {
-        aArray[static_cast<size_t>(i)] = static_cast<uint32_t>(i + 1);
+        aArray[(size_t)i] = static_cast<float>(i + 1); // or whatever values
     }
-
 
     WGPUQueue queue = wgpuDeviceGetQueue(this->m_device);
     std::cout << "Using queue " << std::hex << queue << std::dec << std::endl;
-    wgpuQueueWriteBuffer(queue, m_aBuffer, 0, aArray.data(), aArray.size() * sizeof(uint32_t));
+    wgpuQueueWriteBuffer(queue, m_aBuffer, 0, aArray.data(), aArray.size() * sizeof(float));
 
 
     WGPUCommandEncoderDescriptor cmdEncDesc = {
@@ -402,13 +403,13 @@ void ComputeEngine::Run() {
     wgpuComputePassEncoderSetBindGroup(computePass, 0, this->m_bindGroup, 0, nullptr);
 
 	uint32_t invocationCount = size_t(numVals) * sizeof(uint32_t) / sizeof(float);
-	uint32_t workgroupSize = 32;
+	uint32_t workgroupSize = 256;
 	// This ceils invocationCount / workgroupSize
 	uint32_t workgroupCount = (invocationCount + workgroupSize - 1) / workgroupSize;
 	wgpuComputePassEncoderDispatchWorkgroups(computePass, workgroupCount, 1, 1);
 
     wgpuComputePassEncoderEnd(computePass);
-    wgpuCommandEncoderCopyBufferToBuffer(encoder, this->m_resBuffer, 0, this->m_mapBuffer, 0, size_t(numVals) * sizeof(uint32_t));
+    wgpuCommandEncoderCopyBufferToBuffer(encoder, this->m_resBuffer, 0, this->m_mapBuffer, 0, size_t(numVals) * sizeof(float));
 
     WGPUCommandBufferDescriptor cmdBufferDesc = {};
     cmdBufferDesc.label = WGPUStringView{"CommandBuffer", 13};
@@ -460,16 +461,12 @@ void ComputeEngine::Run() {
     // -----------------------------------------------------------------------------
     // Once mapping succeeds, read the mapped range
     // -----------------------------------------------------------------------------
-    const uint32_t* outputData =
-        static_cast<const uint32_t*>(
-            wgpuBufferGetConstMappedRange(this->m_mapBuffer, 0,
-                                        numVals * sizeof(uint32_t)));
+    const float* outputData = static_cast<const float*>(
+        wgpuBufferGetConstMappedRange(this->m_mapBuffer, 0, (uint64_t)numVals * sizeof(float)));
 
     for (int i = 0; i < numVals; ++i) {
         std::cout << "input[" << i << "] processed -> " << outputData[i] << std::endl;
     }
-
-    // Unmap to release the mapping
     wgpuBufferUnmap(this->m_mapBuffer);
 
     // -----------------------------------------------------------------------------
