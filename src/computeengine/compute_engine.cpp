@@ -295,7 +295,7 @@ fn computeMain(@builtin(global_invocation_id) id: vec3<u32>) {
     WGPUConstantEntry constantEntry = {};
     constantEntry.nextInChain = nullptr;
     constantEntry.key = WGPUStringView{"group_size", static_cast<uint32_t>(std::strlen("group_size"))};
-    constantEntry.value = static_cast<double>(256.0);
+    constantEntry.value = static_cast<double>(32.0);
 
     WGPUComputeState computeState = {};
     computeState.nextInChain = nullptr;
@@ -314,14 +314,11 @@ fn computeMain(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 
 void ComputeEngine::initBuffers() {
-    const int32_t numVals = 1024;
-    const uint64_t bytes = (uint64_t)numVals * sizeof(float); // floats
-
     WGPUBufferDescriptor aBufferDesc = {};
     aBufferDesc.nextInChain = nullptr;
     aBufferDesc.label = WGPUStringView{"A Buffer", static_cast<uint32_t>(strlen("A Buffer"))};
     aBufferDesc.usage = (WGPUBufferUsage)(WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst);
-    aBufferDesc.size = bytes;
+    aBufferDesc.size = m_bytes;
     aBufferDesc.mappedAtCreation = false;
     this->m_aBuffer = wgpuDeviceCreateBuffer(this->m_device, &aBufferDesc);
 
@@ -329,7 +326,7 @@ void ComputeEngine::initBuffers() {
     resBufferDesc.nextInChain = nullptr;
     resBufferDesc.label = WGPUStringView{"Result Buffer", static_cast<uint32_t>(strlen("Result Buffer"))};
     resBufferDesc.usage = (WGPUBufferUsage)(WGPUBufferUsage_Storage | WGPUBufferUsage_CopySrc);
-    resBufferDesc.size = bytes;
+    resBufferDesc.size = m_bytes;
     resBufferDesc.mappedAtCreation = false;
     this->m_resBuffer = wgpuDeviceCreateBuffer(this->m_device, &resBufferDesc);
 
@@ -340,20 +337,18 @@ void ComputeEngine::initBuffers() {
 }
 
 void ComputeEngine::BindGroups() {
-    const int32_t numVals = 1024;
-    const uint64_t bytes = (uint64_t)numVals * sizeof(float);
 
     WGPUBindGroupEntry aBufBinding = {};
     aBufBinding.binding = 0;
     aBufBinding.buffer = this->m_aBuffer;
     aBufBinding.offset = 0;
-    aBufBinding.size =  bytes;
+    aBufBinding.size = m_bytes;
 
     WGPUBindGroupEntry resBufBinding = {};
     resBufBinding.binding = 1;
     resBufBinding.buffer = this->m_resBuffer;
     resBufBinding.offset = 0;
-    resBufBinding.size = bytes;
+    resBufBinding.size = m_bytes;
 
     WGPUBindGroupEntry entries[] = {aBufBinding, resBufBinding};
 
@@ -365,16 +360,13 @@ void ComputeEngine::BindGroups() {
 }
 
 void ComputeEngine::Run() {
-    const int32_t numVals = 1024;
-    // const uint64_t groupSize = 256;
-    // bool timeSupport = false;
 
     // Create the data arrays
-    std::vector<uint32_t> res(1u, 0u);
+    // std::vector<uint32_t> res(1u, 0u);
 
     // Initialize arrays
-    std::vector<float> aArray((size_t)numVals);
-    for (int32_t i = 0; i < numVals; ++i) {
+    std::vector<float> aArray((size_t)m_numVals);
+    for (int32_t i = 0; i < m_numVals; ++i) {
         aArray[(size_t)i] = static_cast<float>(i + 1); // or whatever values
     }
 
@@ -383,11 +375,9 @@ void ComputeEngine::Run() {
     wgpuQueueWriteBuffer(queue, m_aBuffer, 0, aArray.data(), aArray.size() * sizeof(float));
 
 
-    WGPUCommandEncoderDescriptor cmdEncDesc = {
-        .nextInChain = nullptr,
-        .label = WGPUStringView{"My Command Encoder", 18}
-    };
-
+    WGPUCommandEncoderDescriptor cmdEncDesc = {};
+    cmdEncDesc.nextInChain = nullptr;
+    cmdEncDesc.label = WGPUStringView{"My Command Encoder", 18};
     WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(this->m_device, &cmdEncDesc);
     std::cout << "Created command encoder " << std::hex << encoder << std::dec << std::endl;
 
@@ -402,52 +392,68 @@ void ComputeEngine::Run() {
     wgpuComputePassEncoderSetPipeline(computePass, this->m_pipeline);
     wgpuComputePassEncoderSetBindGroup(computePass, 0, this->m_bindGroup, 0, nullptr);
 
-	uint32_t invocationCount = size_t(numVals) * sizeof(uint32_t) / sizeof(float);
-	uint32_t workgroupSize = 256;
+    uint32_t invocationCount = m_numVals;
+	uint32_t workgroupSize = 32;
 	// This ceils invocationCount / workgroupSize
 	uint32_t workgroupCount = (invocationCount + workgroupSize - 1) / workgroupSize;
 	wgpuComputePassEncoderDispatchWorkgroups(computePass, workgroupCount, 1, 1);
 
     wgpuComputePassEncoderEnd(computePass);
-    wgpuCommandEncoderCopyBufferToBuffer(encoder, this->m_resBuffer, 0, this->m_mapBuffer, 0, size_t(numVals) * sizeof(float));
+    wgpuCommandEncoderCopyBufferToBuffer(encoder, this->m_resBuffer, 0, this->m_mapBuffer, 0, size_t(m_numVals) * sizeof(float));
 
     WGPUCommandBufferDescriptor cmdBufferDesc = {};
     cmdBufferDesc.label = WGPUStringView{"CommandBuffer", 13};
     WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, &cmdBufferDesc);
-
+    std::cout << "Finished command encoder, got command buffer " << std::hex << commands << std::dec << std::endl;
+    wgpuQueueSubmit(queue, 1, &commands);
+    std::cout << "Submitted command buffer to queue." << std::endl;
     // -----------------------------------------------------------------------------
     // Map the result buffer to CPU
     // -----------------------------------------------------------------------------
+    struct MapUserData {
+        bool* ready;
+        WGPUBuffer buffer;
+        std::vector<float>* aArray;
+        std::vector<float>* outputArray;
+    };
 
     bool done = false;
+    // start the output array here
+    std::vector<float> outputArray;
+    MapUserData userData = { &done, this->m_mapBuffer, &aArray, &outputArray };
 
     // Create callback info struct
     WGPUBufferMapCallbackInfo callbackInfo = {};
     callbackInfo.nextInChain = nullptr;
     callbackInfo.mode = WGPUCallbackMode_AllowSpontaneous;
+    callbackInfo.userdata1 = &userData;
+    callbackInfo.userdata2 = nullptr;
 
     // The callback will be invoked when mapping is done
-    callbackInfo.callback =
-        +[](WGPUMapAsyncStatus status,
+    callbackInfo.callback = [](WGPUMapAsyncStatus status,
             WGPUStringView message,
             void* userdata1,
             void* userdata2) {
+            (void)message;
             (void)userdata2;
-            bool* done = reinterpret_cast<bool*>(userdata1);
             if (status == WGPUMapAsyncStatus_Success) {
-                std::cout << "Buffer mapping successful!" << std::endl;
-            } else {
-                std::cerr << "Buffer mapping failed: "
-                        << std::string(message.data, message.length)
-                        << std::endl;
-            }
-            *done = true;
-        };
-    callbackInfo.userdata1 = &done;
+                MapUserData* data = reinterpret_cast<MapUserData*>(userdata1);
+                *data->ready = true;
+                const void* mappedData = wgpuBufferGetConstMappedRange(data->buffer, 0, 0);
 
+                size_t numElements = data->aArray->size();
+                data->outputArray->resize(numElements);
+                std::memcpy(data->outputArray->data(), mappedData, numElements * sizeof(float));
+
+                for (size_t i = 0; i < data->aArray->size(); ++i) {
+                    std::cout << "inside callback " << std::hex << (*data->aArray)[i] << std::dec << " became " << (*data->outputArray)[i] << std::endl;
+                }
+                wgpuBufferUnmap(data->buffer);
+            }
+        };
     // Request async map
     wgpuBufferMapAsync(this->m_mapBuffer, WGPUMapMode_Read, 0,
-                    numVals * sizeof(uint32_t), callbackInfo);
+                    m_numVals * sizeof(float), callbackInfo);
 
     // Poll Dawn’s event loop until done
     while (!done) {
@@ -461,12 +467,12 @@ void ComputeEngine::Run() {
     // -----------------------------------------------------------------------------
     // Once mapping succeeds, read the mapped range
     // -----------------------------------------------------------------------------
-    const float* outputData = static_cast<const float*>(
-        wgpuBufferGetConstMappedRange(this->m_mapBuffer, 0, (uint64_t)numVals * sizeof(float)));
-
-    for (int i = 0; i < numVals; ++i) {
-        std::cout << "input[" << i << "] processed -> " << outputData[i] << std::endl;
+    if (userData.outputArray) {
+        for (size_t i = 0; i < userData.aArray->size(); ++i) {
+            std::cout << "outside callback " << std::hex << (*userData.aArray)[i] << std::dec << " became " << (*userData.outputArray)[i] << std::endl;
+        }
     }
+
     wgpuBufferUnmap(this->m_mapBuffer);
 
     // -----------------------------------------------------------------------------

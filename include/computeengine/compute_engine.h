@@ -35,4 +35,7 @@ private:
     WGPUBuffer m_aBuffer;
     WGPUBuffer m_resBuffer;
     WGPUBuffer m_mapBuffer;
+
+    static constexpr int32_t m_numVals = 1024;
+    static constexpr uint64_t m_bytes = static_cast<uint64_t>(m_numVals) * sizeof(float); // floats
 };
